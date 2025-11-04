@@ -24,40 +24,46 @@ const int TOPK = 10;
 */
 void Jaccard_Similarity(double *hostVectors, double *queryVec, double *answers, int VECTOR_DIM, int NUM_VECTORS ) {
     for (int i = 0; i < NUM_VECTORS; i++) {
-        int intersection = 0;
-        int unionCount = 0;
+        double sumMin = 0.0;
+        double sumMax = 0.0;
         for (int j = 0; j < VECTOR_DIM; j++) {
-            if (hostVectors[i * VECTOR_DIM + j] > 0 && queryVec[j] > 0) {
-                intersection++;
-            }
-            if (hostVectors[i * VECTOR_DIM + j] > 0 || queryVec[j] > 0) {
-                unionCount++;
-            }
+            double xi = hostVectors[i * VECTOR_DIM + j];
+            double yi = queryVec[j];
+            sumMin += min(xi, yi);
+            sumMax += max(xi, yi);
         }
         double jaccardSimilarity;
-        if (unionCount == 0) {
+        if (sumMax == 0) {
             jaccardSimilarity = 0;
         } else {
-            jaccardSimilarity = (double)intersection / unionCount;
+            jaccardSimilarity = sumMin / sumMax;
         }
         answers[i] = jaccardSimilarity;
     }
 }
 
 __global__ void jaccardKernel(double *hostVectors, double *queryVec, double *answers, int VECTOR_DIM, int NUM_VECTORS) {
+    //calculating the thread index
     int i = blockIdx.x * blockDim.x + threadIdx.x;
+    //checking if the thread us within the bounds of the vectors
     if (i < NUM_VECTORS) {
-        int intersection = 0;
-        int unionCount = 0;
+        double sumMin = 0.0;
+        double sumMax = 0.0;
+        //looping through vectors to calculate weighted Jaccard
         for (int j = 0; j < VECTOR_DIM; j++) {
-            if (hostVectors[i * VECTOR_DIM + j] > 0 && queryVec[j] > 0) {
-                intersection++;
-            }
-            if (hostVectors[i * VECTOR_DIM + j] > 0 || queryVec[j] > 0) {
-                unionCount++;
-            }
+            double xi = hostVectors[i * VECTOR_DIM + j];
+            double yi = queryVec[j];
+            sumMin += min(xi, yi);
+            sumMax += max(xi, yi);
         }
-        answers[i] = (unionCount == 0) ? 0 : (double)intersection / unionCount;
+        // calculating Weighted Jaccard similarity
+        double jaccardSimilarity;
+        if (sumMax == 0) {
+            jaccardSimilarity = 0;
+        } else {
+            jaccardSimilarity = sumMin / sumMax;
+        }
+        answers[i] = jaccardSimilarity;
     }
 }
 
@@ -180,15 +186,24 @@ int main() {
     populatehostVectors(vectors, hostVectors);
 
     // to store distances between elements of input vector from a query vector
-    double answers[NUM_VECTORS];
-    
-    euclidean_distanceArr(hostVectors, hostVectors, answers, VECTOR_DIM, NUM_VECTORS);
-    
-    Jaccard_Similarity(hostVectors, hostVectors, answers, VECTOR_DIM, NUM_VECTORS);
+    double seq_answers[NUM_VECTORS];
 
-    double *topK_SimilarItems = topK(answers, NUM_VECTORS);
-    
-    printResult(topK_SimilarItems, TOPK);
+    euclidean_distanceArr(hostVectors, hostVectors, seq_answers, VECTOR_DIM, NUM_VECTORS);
+
+    Jaccard_Similarity(hostVectors, hostVectors, seq_answers, VECTOR_DIM, NUM_VECTORS);
+
+    double *topK_SimilarItems = topK(seq_answers, NUM_VECTORS);
+
+    // parallel version
+    double par_answers[NUM_VECTORS];
+
+    euclidean_distanceArr(hostVectors, hostVectors, par_answers, VECTOR_DIM, NUM_VECTORS);
+
+    Parallel_Jaccard_Similarity(hostVectors, hostVectors, par_answers, VECTOR_DIM, NUM_VECTORS);
+
+    double *par_topK_SimilarItems = topK(par_answers, NUM_VECTORS);
+
+    printResult(par_topK_SimilarItems, TOPK);
     
     std::cout << "Done\n";
     return 0;
