@@ -44,6 +44,46 @@ void Jaccard_Similarity(double *hostVectors, double *queryVec, double *answers, 
     }
 }
 
+__global__ void jaccardKernel(double *hostVectors, double *queryVec, double *answers, int VECTOR_DIM, int NUM_VECTORS) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < NUM_VECTORS) {
+        int intersection = 0;
+        int unionCount = 0;
+        for (int j = 0; j < VECTOR_DIM; j++) {
+            if (hostVectors[i * VECTOR_DIM + j] > 0 && queryVec[j] > 0) {
+                intersection++;
+            }
+            if (hostVectors[i * VECTOR_DIM + j] > 0 || queryVec[j] > 0) {
+                unionCount++;
+            }
+        }
+        answers[i] = (unionCount == 0) ? 0 : (double)intersection / unionCount;
+    }
+}
+
+void Parallel_Jaccard_Similarity(double *hostVectors, double *queryVec, double *answers, int VECTOR_DIM, int NUM_VECTORS) {
+    double *d_hostVectors, *d_queryVec, *d_answers;
+    size_t sizeVectors = NUM_VECTORS * VECTOR_DIM * sizeof(double);
+    size_t sizeAnswers = NUM_VECTORS * sizeof(double);
+
+    cudaMalloc((void **)&d_hostVectors, sizeVectors);
+    cudaMalloc((void **)&d_queryVec, VECTOR_DIM * sizeof(double));
+    cudaMalloc((void **)&d_answers, sizeAnswers);
+
+    cudaMemcpy(d_hostVectors, hostVectors, sizeVectors, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_queryVec, queryVec, VECTOR_DIM * sizeof(double), cudaMemcpyHostToDevice);
+
+    int blockSize = 256;
+    int numBlocks = (NUM_VECTORS + blockSize - 1) / blockSize;
+    jaccardKernel<<<numBlocks, blockSize>>>(d_hostVectors, d_queryVec, d_answers, VECTOR_DIM, NUM_VECTORS);
+
+    cudaMemcpy(answers, d_answers, sizeAnswers, cudaMemcpyDeviceToHost);
+
+    cudaFree(d_hostVectors);
+    cudaFree(d_queryVec);
+    cudaFree(d_answers);
+}
+
 /*
   Query vector is the first vector in the input array "hostVectors"". Each vector is of the same size = VECTOR_DIM. 
   Euclidean distance computation is just an example of a distance. 
