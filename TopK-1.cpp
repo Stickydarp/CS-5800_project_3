@@ -22,9 +22,26 @@ const int TOPK = 10;
   Query vector is the first vector in the input array "hostVectors"". Each vector is of the same size = VECTOR_DIM. 
   Store the Jaccard distances of input vectors from the query vector in "answers" array
 */
-void Jaccard_Similarity(double *hostVectors, double *queryVec, double *answers, int VECTOR_DIM, int NUM_VECTORS ) 
-{
-
+void Jaccard_Similarity(double *hostVectors, double *queryVec, double *answers, int VECTOR_DIM, int NUM_VECTORS ) {
+    for (int i = 0; i < NUM_VECTORS; i++) {
+        int intersection = 0;
+        int unionCount = 0;
+        for (int j = 0; j < VECTOR_DIM; j++) {
+            if (hostVectors[i * VECTOR_DIM + j] > 0 && queryVec[j] > 0) {
+                intersection++;
+            }
+            if (hostVectors[i * VECTOR_DIM + j] > 0 || queryVec[j] > 0) {
+                unionCount++;
+            }
+        }
+        double jaccardSimilarity;
+        if (unionCount == 0) {
+            jaccardSimilarity = 0;
+        } else {
+            jaccardSimilarity = (double)intersection / unionCount;
+        }
+        answers[i] = jaccardSimilarity;
+    }
 }
 
 /*
