@@ -5,9 +5,10 @@
 #include <string>
 #include <cmath>
 #include <iomanip>
+#include <algorithm>
 
 /*
-compile: g++ -o topk TopK.cpp
+compile: g++ -o topk TopK.cu
 run    : ./topk
 */
 
